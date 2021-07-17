@@ -1725,6 +1725,13 @@ f_prompt_setprompt(typval_T *argvars, typval_T *rettv UNUSED)
     buf_T	*buf;
     char_u	*text;
 
+    if (in_vim9script()
+	    && ((argvars[0].v_type != VAR_STRING
+		    && argvars[0].v_type != VAR_NUMBER
+		    && check_for_string_arg(argvars, 0) == FAIL)
+		|| check_for_string_arg(argvars, 1) == FAIL))
+	return;
+
     if (check_secure())
 	return;
     buf = tv_get_buf(&argvars[0], FALSE);
@@ -1925,6 +1932,36 @@ f_job_stop(typval_T *argvars, typval_T *rettv)
 
     if (job != NULL)
 	rettv->vval.v_number = job_stop(job, argvars, NULL);
+}
+
+/*
+ * Get a string with information about the job in "varp" in "buf".
+ * "buf" must be at least NUMBUFLEN long.
+ */
+    char_u *
+job_to_string_buf(typval_T *varp, char_u *buf)
+{
+    job_T *job = varp->vval.v_job;
+    char  *status;
+
+    if (job == NULL)
+	return (char_u *)"no process";
+    status = job->jv_status == JOB_FAILED ? "fail"
+		    : job->jv_status >= JOB_ENDED ? "dead"
+		    : "run";
+# ifdef UNIX
+    vim_snprintf((char *)buf, NUMBUFLEN,
+		"process %ld %s", (long)job->jv_pid, status);
+# elif defined(MSWIN)
+    vim_snprintf((char *)buf, NUMBUFLEN,
+		"process %ld %s",
+		(long)job->jv_proc_info.dwProcessId,
+		status);
+# else
+    // fall-back
+    vim_snprintf((char *)buf, NUMBUFLEN, "process ? %s", status);
+# endif
+    return buf;
 }
 
 #endif // FEAT_JOB_CHANNEL
